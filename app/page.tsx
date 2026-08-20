@@ -19,6 +19,20 @@ type Draft = Pick<Task, "time" | "label" | "note" | "duration" | "tone">;
 
 const emptyDraft: Draft = { time: "09:00", label: "", note: "", duration: 45, tone: "coral" };
 const energies: Energy[] = ["Deep", "Steady", "Light"];
+const localMode = process.env.NEXT_PUBLIC_STORAGE_MODE === "local";
+
+function readLocalTasks(date: string): Task[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(`luma:${date}`) ?? "[]");
+    return Array.isArray(value) ? value as Task[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalTasks(date: string, tasks: Task[]) {
+  localStorage.setItem(`luma:${date}`, JSON.stringify(tasks));
+}
 
 function pragueDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -84,6 +98,20 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedDate) return;
+    if (localMode) {
+      let current = true;
+      queueMicrotask(() => {
+        if (!current) return;
+        const next = readLocalTasks(selectedDate);
+        const nextSelected = next[0];
+        setTasks(next);
+        setActiveTask(nextSelected?.id ?? "");
+        setSecondsLeft((nextSelected?.duration ?? 0) * 60);
+        setRunning(false);
+        setLoading(false);
+      });
+      return () => { current = false; };
+    }
     const controller = new AbortController();
     let current = true;
     fetch(`/api/tasks?date=${selectedDate}`, { signal: controller.signal })
@@ -185,6 +213,21 @@ export default function Home() {
   async function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const operationDate = selectedDate;
+    if (localMode) {
+      const previous = tasks.find((task) => task.id === editingId);
+      const task: Task = {
+        id: editingId || crypto.randomUUID(), date: selectedDate, ...draft,
+        done: previous?.done ?? false, position: 0,
+      };
+      const next = (editingId
+        ? tasks.map((item) => item.id === editingId ? task : item)
+        : [...tasks, task]).sort((a, b) => a.time.localeCompare(b.time));
+      writeLocalTasks(selectedDate, next);
+      setTasks(next);
+      selectTask(task);
+      setComposerOpen(false);
+      return;
+    }
     try {
       const payload = editingId ? { id: editingId, ...draft } : { date: selectedDate, position: 0, ...draft };
       const { task } = await request("/api/tasks", {
@@ -204,6 +247,12 @@ export default function Home() {
 
   async function toggleTask(task: Task) {
     const operationDate = selectedDate;
+    if (localMode) {
+      const next = tasks.map((item) => item.id === task.id ? { ...item, done: !item.done } : item);
+      writeLocalTasks(selectedDate, next);
+      setTasks(next);
+      return;
+    }
     try {
       const { task: updated } = await request("/api/tasks", {
         method: "PATCH", body: JSON.stringify({ id: task.id, done: !task.done }),
@@ -216,21 +265,31 @@ export default function Home() {
 
   async function deleteTask(id: string) {
     const operationDate = selectedDate;
+    if (localMode) {
+      const remaining = tasks.filter((task) => task.id !== id);
+      writeLocalTasks(selectedDate, remaining);
+      finishDelete(id, remaining);
+      return;
+    }
     try {
       await request(`/api/tasks?id=${encodeURIComponent(id)}`, { method: "DELETE", body: "{}" });
       if (selectedDateRef.current !== operationDate) return;
       const remaining = tasks.filter((task) => task.id !== id);
-      setTasks(remaining);
-      if (activeTask === id) {
-        setActiveTask(remaining[0]?.id ?? "");
-        setSecondsLeft((remaining[0]?.duration ?? 0) * 60);
-        setRunning(false);
-      }
-      setDeletingId("");
-      setFocusMode(false);
+      finishDelete(id, remaining);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not delete the block.");
     }
+  }
+
+  function finishDelete(id: string, remaining: Task[]) {
+    setTasks(remaining);
+    if (activeTask === id) {
+      setActiveTask(remaining[0]?.id ?? "");
+      setSecondsLeft((remaining[0]?.duration ?? 0) * 60);
+      setRunning(false);
+    }
+    setDeletingId("");
+    setFocusMode(false);
   }
 
   const timerText = `${Math.floor(secondsLeft / 60).toString().padStart(2, "0")}:${(secondsLeft % 60).toString().padStart(2, "0")}`;
