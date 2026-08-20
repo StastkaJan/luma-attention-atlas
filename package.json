@@ -9,9 +9,9 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test:ssr": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test:build": "npm run build && node --test tests/build-output.test.mjs",
     "test:e2e": "playwright test",
-    "test": "npm run test:ssr && npm run test:e2e",
+    "test": "npm run test:build && npm run test:e2e",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
