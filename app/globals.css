@@ -30,7 +30,10 @@ nav a:hover,nav a:focus-visible,nav .nav-active { border-color:var(--coral); }
 h1 { font-size:clamp(4rem,7.6vw,8.7rem); line-height:.78; letter-spacing:-.075em; margin:0; font-weight:720; max-width:760px; }
 h1 em { color:var(--blue); font-family:Georgia,serif; font-weight:400; }
 .intro { max-width:440px; font-size:clamp(1rem,1.4vw,1.25rem); line-height:1.5; margin:52px 0 44px; }
-.energy-control { margin-top:auto; display:flex; align-items:center; gap:18px; font-family:var(--font-geist-mono); font-size:.68rem; letter-spacing:.08em; }
+.energy-control { margin-top:auto; display:flex; flex-direction:column; align-items:flex-start; gap:10px; font-family:var(--font-geist-mono); font-size:.68rem; letter-spacing:.08em; }
+.energy-picker { display:flex; align-items:center; gap:18px; }
+.energy-feedback { min-height:1em; margin:0; color:rgba(18,18,18,.65); font-size:.62rem; letter-spacing:.03em; }
+.energy-feedback strong { color:var(--blue); }
 .segmented { display:flex; border:1px solid var(--ink); }
 .segmented button { min-height:40px; padding:0 16px; background:transparent; border:0; border-right:1px solid var(--ink); cursor:pointer; text-transform:uppercase; font-size:.65rem; }
 .segmented button:last-child { border-right:0; }
@@ -129,7 +132,7 @@ button:focus-visible,a:focus-visible { outline:3px solid var(--ink); outline-off
   .hero-copy { min-height:650px; padding:48px 22px 40px; }
   h1 { font-size:clamp(3.8rem,19vw,6rem); }
   .intro { margin-top:38px; }
-  .energy-control { align-items:flex-start; flex-direction:column; gap:10px; }
+  .energy-picker { align-items:flex-start; flex-direction:column; gap:10px; }
   .segmented button { min-height:44px; padding:0 13px; }
   .atlas-panel { min-height:600px; padding-inline:24px; }
   .panel-heading { inset-inline:20px; }.panel-heading span:last-child { display:none; }

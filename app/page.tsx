@@ -18,6 +18,17 @@ type Draft = Pick<Task, "time" | "label" | "note" | "duration" | "tone">;
 const emptyDraft: Draft = { time: "09:00", label: "", note: "", duration: 45, tone: "coral" };
 const energies: Energy[] = ["Deep", "Steady", "Light"];
 
+function recommendTask(tasks: Task[], energy: Energy) {
+  const available = tasks.filter((task) => !task.done);
+  if (energy === "Steady") return available[0];
+  return available.reduce<Task | undefined>((best, task) => {
+    if (!best) return task;
+    return energy === "Deep"
+      ? task.duration > best.duration ? task : best
+      : task.duration < best.duration ? task : best;
+  }, undefined);
+}
+
 function readLocalTasks(date: string): Task[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(`luma:${date}`) ?? "[]");
@@ -73,6 +84,7 @@ export default function Home() {
     () => tasks.find((task) => task.id === activeTask) ?? tasks[0],
     [activeTask, tasks],
   );
+  const recommended = useMemo(() => recommendTask(tasks, energy), [tasks, energy]);
   const doneCount = tasks.filter((task) => task.done).length;
   const totalMinutes = tasks.reduce((sum, task) => sum + task.duration, 0);
 
@@ -157,6 +169,12 @@ export default function Home() {
     setRunning(false);
   }
 
+  function chooseEnergy(next: Energy) {
+    setEnergy(next);
+    const nextTask = recommendTask(tasks, next);
+    if (nextTask) selectTask(nextTask);
+  }
+
   function openComposer(task?: Task) {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setEditingId(task?.id ?? "");
@@ -227,10 +245,13 @@ export default function Home() {
           <p className="intro">Plan fewer things, protect the time they need, and finish with a clean record of what moved.</p>
           <button type="button" className="add-button" onClick={() => openComposer()}><span aria-hidden="true">+</span>Add focus block</button>
           <div className="energy-control">
-            <span id="energy-label">ENERGY /</span>
-            <div className="segmented" role="group" aria-labelledby="energy-label">
-              {energies.map((item) => <button key={item} type="button" aria-pressed={energy === item} onClick={() => setEnergy(item)}>{item}</button>)}
+            <div className="energy-picker">
+              <span id="energy-label">ENERGY /</span>
+              <div className="segmented" role="group" aria-labelledby="energy-label">
+                {energies.map((item) => <button key={item} type="button" aria-pressed={energy === item} onClick={() => chooseEnergy(item)}>{item}</button>)}
+              </div>
             </div>
+            <p className="energy-feedback" aria-live="polite">{recommended ? <>Recommended now / <strong>{recommended.label}</strong> · {recommended.duration}m</> : "Add a block to get an energy-based recommendation."}</p>
           </div>
         </div>
 

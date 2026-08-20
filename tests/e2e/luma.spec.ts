@@ -70,6 +70,27 @@ test("date navigation, keyboard editor, and reduced motion work", async ({ page 
   await expect(add).toBeFocused();
 });
 
+test("energy immediately recommends a matching unfinished block", async ({ page }) => {
+  for (const block of [
+    { time: "09:00", label: "Long project", minutes: "80" },
+    { time: "10:00", label: "Quick task", minutes: "20" },
+  ]) {
+    await page.getByRole("button", { name: "Add focus block" }).click();
+    await page.getByLabel("What needs attention?").fill(block.label);
+    await page.getByLabel("Start").fill(block.time);
+    await page.getByLabel("Minutes").fill(block.minutes);
+    await page.getByRole("button", { name: "Add to atlas" }).click();
+  }
+
+  await page.getByRole("button", { name: "Deep", exact: true }).click();
+  await expect(page.locator(".energy-feedback")).toContainText("Long project · 80m");
+  await expect(page.locator(".task", { hasText: "Long project" })).toHaveClass(/active/);
+
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(page.locator(".energy-feedback")).toContainText("Quick task · 20m");
+  await expect(page.locator(".task", { hasText: "Quick task" })).toHaveClass(/active/);
+});
+
 test("keeps keyboard focus inside the editor", async ({ page }) => {
   await page.getByRole("button", { name: "Add focus block" }).click();
   await page.getByRole("button", { name: "Add to atlas" }).focus();
