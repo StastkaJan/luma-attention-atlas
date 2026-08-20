@@ -1,8 +1,8 @@
 # Luma — Attention Atlas
 
-A tactile, responsive daily-planning instrument built with Vinext, React, and Cloudflare D1.
+A tactile, responsive daily-planning instrument built with Vinext and React.
 
-Luma supports dated plans, durable focus blocks, editing, guarded deletion,
+Luma supports browser-local dated plans, focus blocks, editing, guarded deletion,
 completion tracking, and timed focus sessions.
 
 ## Development

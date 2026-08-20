@@ -4,10 +4,10 @@ import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 
-test("build emits a deployable worker with D1 configuration", async () => {
+test("build emits a deployable worker without remote storage", async () => {
   await access(new URL("dist/server/index.js", root));
   const hosting = JSON.parse(await readFile(new URL("dist/.openai/hosting.json", root), "utf8"));
-  assert.equal(hosting.d1, "DB");
+  assert.equal(hosting.d1, null);
   assert.equal(hosting.r2, null);
 });
 

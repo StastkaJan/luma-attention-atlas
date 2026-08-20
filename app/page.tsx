@@ -6,20 +6,17 @@ type Tone = "coral" | "blue" | "moss";
 type Energy = "Deep" | "Steady" | "Light";
 type Task = {
   id: string;
-  date: string;
   time: string;
   label: string;
   note: string;
   duration: number;
   tone: Tone;
   done: boolean;
-  position: number;
 };
 type Draft = Pick<Task, "time" | "label" | "note" | "duration" | "tone">;
 
 const emptyDraft: Draft = { time: "09:00", label: "", note: "", duration: 45, tone: "coral" };
 const energies: Energy[] = ["Deep", "Steady", "Light"];
-const localMode = process.env.NEXT_PUBLIC_STORAGE_MODE === "local";
 
 function readLocalTasks(date: string): Task[] {
   try {
@@ -63,7 +60,6 @@ export default function Home() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [time, setTime] = useState("--:--");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
@@ -72,7 +68,6 @@ export default function Home() {
   const labelRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
-  const selectedDateRef = useRef(selectedDate);
 
   const selected = useMemo(
     () => tasks.find((task) => task.id === activeTask) ?? tasks[0],
@@ -80,10 +75,6 @@ export default function Home() {
   );
   const doneCount = tasks.filter((task) => task.done).length;
   const totalMinutes = tasks.reduce((sum, task) => sum + task.duration, 0);
-
-  useEffect(() => {
-    selectedDateRef.current = selectedDate;
-  }, [selectedDate]);
 
   useEffect(() => {
     const updateTime = () => setTime(new Intl.DateTimeFormat("en-GB", {
@@ -98,40 +89,18 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedDate) return;
-    if (localMode) {
-      let current = true;
-      queueMicrotask(() => {
-        if (!current) return;
-        const next = readLocalTasks(selectedDate);
-        const nextSelected = next[0];
-        setTasks(next);
-        setActiveTask(nextSelected?.id ?? "");
-        setSecondsLeft((nextSelected?.duration ?? 0) * 60);
-        setRunning(false);
-        setLoading(false);
-      });
-      return () => { current = false; };
-    }
-    const controller = new AbortController();
     let current = true;
-    fetch(`/api/tasks?date=${selectedDate}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Could not load this day.");
-        return response.json() as Promise<{ tasks: Task[] }>;
-      })
-      .then(({ tasks: next }) => {
-        if (!current) return;
-        const nextSelected = next[0];
-        setTasks(next);
-        setActiveTask(nextSelected?.id ?? "");
-        setSecondsLeft((nextSelected?.duration ?? 0) * 60);
-        setRunning(false);
-      })
-      .catch((reason: unknown) => {
-        if (current && !(reason instanceof DOMException && reason.name === "AbortError")) setError("Could not load this day. Try again.");
-      })
-      .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; controller.abort(); };
+    queueMicrotask(() => {
+      if (!current) return;
+      const next = readLocalTasks(selectedDate);
+      const nextSelected = next[0];
+      setTasks(next);
+      setActiveTask(nextSelected?.id ?? "");
+      setSecondsLeft((nextSelected?.duration ?? 0) * 60);
+      setRunning(false);
+      setLoading(false);
+    });
+    return () => { current = false; };
   }, [selectedDate]);
 
   useEffect(() => {
@@ -172,20 +141,8 @@ export default function Home() {
     };
   }, [composerOpen, editingId]);
 
-  async function request(url: string, init: RequestInit) {
-    setError("");
-    const response = await fetch(url, {
-      ...init,
-      headers: { "content-type": "application/json", ...init.headers },
-    });
-    const body = response.status === 204 ? {} : await response.json() as { task?: Task; error?: string };
-    if (!response.ok) throw new Error(body.error || "Something went wrong.");
-    return body;
-  }
-
   function chooseDate(date: string) {
     setLoading(true);
-    setError("");
     setTasks([]);
     setActiveTask("");
     setSecondsLeft(0);
@@ -210,78 +167,31 @@ export default function Home() {
     setDeletingId("");
   }
 
-  async function saveTask(event: FormEvent<HTMLFormElement>) {
+  function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const operationDate = selectedDate;
-    if (localMode) {
-      const previous = tasks.find((task) => task.id === editingId);
-      const task: Task = {
-        id: editingId || crypto.randomUUID(), date: selectedDate, ...draft,
-        done: previous?.done ?? false, position: 0,
-      };
-      const next = (editingId
-        ? tasks.map((item) => item.id === editingId ? task : item)
-        : [...tasks, task]).sort((a, b) => a.time.localeCompare(b.time));
-      writeLocalTasks(selectedDate, next);
-      setTasks(next);
-      selectTask(task);
-      setComposerOpen(false);
-      return;
-    }
-    try {
-      const payload = editingId ? { id: editingId, ...draft } : { date: selectedDate, position: 0, ...draft };
-      const { task } = await request("/api/tasks", {
-        method: editingId ? "PATCH" : "POST",
-        body: JSON.stringify(payload),
-      });
-      if (!task || selectedDateRef.current !== operationDate) return;
-      setTasks((current) => editingId
-        ? current.map((item) => item.id === task.id ? task : item)
-        : [...current, task].sort((a, b) => a.time.localeCompare(b.time)));
-      selectTask(task);
-      setComposerOpen(false);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not save the block.");
-    }
+    const previous = tasks.find((task) => task.id === editingId);
+    const task: Task = {
+      id: editingId || crypto.randomUUID(), ...draft,
+      done: previous?.done ?? false,
+    };
+    const next = (editingId
+      ? tasks.map((item) => item.id === editingId ? task : item)
+      : [...tasks, task]).sort((a, b) => a.time.localeCompare(b.time));
+    writeLocalTasks(selectedDate, next);
+    setTasks(next);
+    selectTask(task);
+    setComposerOpen(false);
   }
 
-  async function toggleTask(task: Task) {
-    const operationDate = selectedDate;
-    if (localMode) {
-      const next = tasks.map((item) => item.id === task.id ? { ...item, done: !item.done } : item);
-      writeLocalTasks(selectedDate, next);
-      setTasks(next);
-      return;
-    }
-    try {
-      const { task: updated } = await request("/api/tasks", {
-        method: "PATCH", body: JSON.stringify({ id: task.id, done: !task.done }),
-      });
-      if (updated && selectedDateRef.current === operationDate) setTasks((current) => current.map((item) => item.id === updated.id ? updated : item));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not update the block.");
-    }
+  function toggleTask(task: Task) {
+    const next = tasks.map((item) => item.id === task.id ? { ...item, done: !item.done } : item);
+    writeLocalTasks(selectedDate, next);
+    setTasks(next);
   }
 
-  async function deleteTask(id: string) {
-    const operationDate = selectedDate;
-    if (localMode) {
-      const remaining = tasks.filter((task) => task.id !== id);
-      writeLocalTasks(selectedDate, remaining);
-      finishDelete(id, remaining);
-      return;
-    }
-    try {
-      await request(`/api/tasks?id=${encodeURIComponent(id)}`, { method: "DELETE", body: "{}" });
-      if (selectedDateRef.current !== operationDate) return;
-      const remaining = tasks.filter((task) => task.id !== id);
-      finishDelete(id, remaining);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not delete the block.");
-    }
-  }
-
-  function finishDelete(id: string, remaining: Task[]) {
+  function deleteTask(id: string) {
+    const remaining = tasks.filter((task) => task.id !== id);
+    writeLocalTasks(selectedDate, remaining);
     setTasks(remaining);
     if (activeTask === id) {
       setActiveTask(remaining[0]?.id ?? "");
@@ -350,7 +260,6 @@ export default function Home() {
           <p className="ledger-note">A good day has edges.<br />Protect them.</p>
         </div>
 
-        {error && <div className="notice error" role="alert">{error}<button type="button" onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
         {loading ? <p className="empty-state" role="status">Reading the day…</p> : tasks.length === 0 ? (
           <div className="empty-state"><strong>Nothing is competing for your attention.</strong><p>Add one meaningful block to shape the day.</p><button type="button" onClick={() => openComposer()}>Add the first block</button></div>
         ) : (

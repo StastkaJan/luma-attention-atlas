@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-let browserErrors: string[];
+let browserErrors: string[] = [];
 
 test.beforeEach(async ({ page }) => {
   browserErrors = [];
@@ -77,36 +77,6 @@ test("keeps keyboard focus inside the editor", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Close editor" })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(page.getByRole("button", { name: "Add to atlas" })).toBeFocused();
-});
-
-test("rejects invalid task payloads", async ({ request }, testInfo) => {
-  test.skip(testInfo.project.name.includes("mobile"), "one API contract check is enough");
-  const response = await request.post("/api/tasks", { data: { label: "Incomplete" } });
-  expect(response.status()).toBe(400);
-});
-
-test("isolates task data by authenticated user", async ({ request }, testInfo) => {
-  test.skip(testInfo.project.name.includes("mobile"), "one authorization check is enough");
-  const date = "2037-04-12";
-  const alice = { "oai-authenticated-user-email": "alice@example.com" };
-  const bob = { "oai-authenticated-user-email": "bob@example.com" };
-  const created = await request.post("/api/tasks", {
-    headers: alice,
-    data: { date, time: "10:00", label: "Alice only", note: "Private", duration: 30, tone: "moss", position: 0 },
-  });
-  expect(created.status()).toBe(201);
-  const { task } = await created.json();
-
-  const hidden = await request.get(`/api/tasks?date=${date}`, { headers: bob });
-  expect((await hidden.json()).tasks).toEqual([]);
-  const blockedUpdate = await request.patch("/api/tasks", { headers: bob, data: { id: task.id, label: "Stolen" } });
-  expect(blockedUpdate.status()).toBe(404);
-  const blockedDelete = await request.delete(`/api/tasks?id=${task.id}`, { headers: bob });
-  expect(blockedDelete.status()).toBe(404);
-  const visible = await request.get(`/api/tasks?date=${date}`, { headers: alice });
-  expect((await visible.json()).tasks).toContainEqual(expect.objectContaining({ id: task.id, label: "Alice only" }));
-
-  await request.delete(`/api/tasks?id=${task.id}`, { headers: alice, data: {} });
 });
 
 test("mobile layout has no horizontal overflow", async ({ page }, testInfo) => {
